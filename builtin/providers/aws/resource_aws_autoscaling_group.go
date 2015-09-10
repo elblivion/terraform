@@ -161,8 +161,9 @@ func resourceAwsAutoscalingGroupCreate(d *schema.ResourceData, meta interface{})
 	}
 
 	if v, ok := d.GetOk("load_balancers"); ok && v.(*schema.Set).Len() > 0 {
-		autoScalingGroupOpts.LoadBalancerNames = expandStringList(
-			v.(*schema.Set).List())
+		if l := expandStringList(v.(*schema.Set).List()); *l[0] != "" {
+			autoScalingGroupOpts.LoadBalancerNames = l
+		}
 	}
 
 	if v, ok := d.GetOk("vpc_zone_identifier"); ok && v.(*schema.Set).Len() > 0 {

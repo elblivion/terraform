@@ -64,6 +64,31 @@ func resourceLibratoAlert() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true,
 						},
+						"tag": &schema.Schema{
+							Type:     schema.TypeSet,
+							Optional: true,
+							Set:      resourceLibratoAlertTagsHash,
+							Elem: &schema.Resource{
+								Schema: map[string]*schema.Schema{
+									"name": {
+										Type:     schema.TypeString,
+										Required: true,
+									},
+									"grouped": {
+										Type:     schema.TypeBool,
+										Optional: true,
+										Default:  false,
+									},
+									"values": {
+										Type:     schema.TypeList,
+										Required: true,
+										Elem: &schema.Schema{
+											Type: schema.TypeString,
+										},
+									},
+								},
+							},
+						},
 						"detect_reset": {
 							Type:     schema.TypeBool,
 							Optional: true,
@@ -135,6 +160,24 @@ func resourceLibratoAlertConditionsHash(v interface{}) int {
 	return hashcode.String(buf.String())
 }
 
+func resourceLibratoAlertTagsHash(v interface{}) int {
+	var buf bytes.Buffer
+	m := v.(map[string]interface{})
+	buf.WriteString(fmt.Sprintf("%s-", m["name"].(string)))
+
+	grouped, present := m["grouped"]
+	if present {
+		buf.WriteString(fmt.Sprintf("%t-", grouped.(bool)))
+	}
+
+	values := m["values"].([]interface{})
+	for _, v := range values {
+		buf.WriteString(fmt.Sprintf("%s-", v.(string)))
+	}
+
+	return hashcode.String(buf.String())
+}
+
 func resourceLibratoAlertCreate(d *schema.ResourceData, meta interface{}) error {
 	client := meta.(*librato.Client)
 
@@ -183,6 +226,30 @@ func resourceLibratoAlertCreate(d *schema.ResourceData, meta interface{}) error 
 			}
 			if v, ok := conditionData["summary_function"].(string); ok && v != "" {
 				condition.SummaryFunction = librato.String(v)
+			}
+			if v, ok := conditionData["tag"]; ok {
+				vs := v.(*schema.Set)
+				tags := make([]librato.AlertConditionTagSet, vs.Len())
+				for i, tagSetDataM := range vs.List() {
+					tagSetData := tagSetDataM.(map[string]interface{})
+					var tag librato.AlertConditionTagSet
+					if v, ok := tagSetData["name"].(string); ok && v != "" {
+						tag.Name = librato.String(v)
+					}
+					if v, ok := tagSetData["grouped"].(bool); ok {
+						tag.Grouped = librato.Bool(v)
+					}
+					if v, ok := tagSetData["values"]; ok {
+						vs := v.([]interface{})
+						values := make([]*string, len(vs))
+						for i, valueData := range vs {
+							values[i] = librato.String(valueData.(string))
+						}
+						tag.Values = values
+					}
+					tags[i] = tag
+				}
+				condition.Tags = tags
 			}
 			conditions[i] = condition
 		}

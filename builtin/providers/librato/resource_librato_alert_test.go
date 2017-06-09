@@ -71,6 +71,7 @@ func TestAccLibratoAlert_Full(t *testing.T) {
 					testAccCheckLibratoAlertExists("librato_alert.foobar", &alert),
 					testAccCheckLibratoAlertName(&alert, name),
 					testAccCheckLibratoAlertDescription(&alert, "A Test Alert"),
+					testAccCheckLibratoAlertTags(&alert, "some_tag", []*string{librato.String("value1")}),
 					resource.TestCheckResourceAttr(
 						"librato_alert.foobar", "name", name),
 					resource.TestCheckResourceAttr(
@@ -260,6 +261,45 @@ func testAccCheckLibratoAlertExists(n string, alert *librato.Alert) resource.Tes
 		return nil
 	}
 }
+func CompareSlicesOfStringPointers(a, b []*string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	if (a == nil) != (b == nil) {
+		return false
+	}
+
+	for i, v := range a {
+		if *v != *b[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func testAccCheckLibratoAlertTags(alert *librato.Alert, key string, values []*string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+
+		if alert.Conditions == nil || len(alert.Conditions) != 1 {
+			return fmt.Errorf("No condition found: %s", *alert.Name)
+		}
+
+		tagSet := alert.Conditions[0].Tags[0]
+
+		if *tagSet.Name != key {
+			return fmt.Errorf("Incorrect key for tag %s in alert %s", *tagSet.Name, *alert.Name)
+		}
+		//reflect.DeepEqual(tagSet.Values, values)
+
+		if !CompareSlicesOfStringPointers(tagSet.Values, values) {
+			return fmt.Errorf("Incorrect value for tag %s in alert %s", *tagSet.Name, *alert.Name)
+		}
+
+		return nil
+	}
+}
 
 func testAccCheckLibratoAlertConfig_minimal(name string) string {
 	return fmt.Sprintf(`
@@ -305,6 +345,10 @@ resource "librato_alert" "foobar" {
       threshold = 10
       duration = 600
       metric_name = "librato.cpu.percent.idle"
+			tag {
+				name = "some_tag"
+				values = [ "value1" ]
+			}
     }
     attributes {
       runbook_url = "https://www.youtube.com/watch?v=oHg5SJYRHA0"
